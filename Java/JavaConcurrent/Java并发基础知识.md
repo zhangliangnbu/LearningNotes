@@ -15,7 +15,7 @@ Java 5以前实现多线程有两种实现方法：一种是继承Thread类；�
 
 补充：Java 5以后创建线程还有第三种方式：实现Callable接口，该接口中的call方法可以在线程执行结束时产生一个返回值，代码如下所示：
 
-```
+```java
 class MyTask implements Callable<Integer> {  
     private int upperBounds;  
       
