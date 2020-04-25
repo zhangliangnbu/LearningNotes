@@ -1,63 +1,68 @@
 
 
-![Synchronized 关键字使用、底层原理、JDK1.6 之后的底层优化以及 和ReenTrantLock 的对比](https://my-blog-to-use.oss-cn-beijing.aliyuncs.com/Java%20%E7%A8%8B%E5%BA%8F%E5%91%98%E5%BF%85%E5%A4%87%EF%BC%9A%E5%B9%B6%E5%8F%91%E7%9F%A5%E8%AF%86%E7%B3%BB%E7%BB%9F%E6%80%BB%E7%BB%93/%E4%BA%8C%20%20Synchronized%20%E5%85%B3%E9%94%AE%E5%AD%97%E4%BD%BF%E7%94%A8%E3%80%81%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86%E3%80%81JDK1.6%20%E4%B9%8B%E5%90%8E%E7%9A%84%E5%BA%95%E5%B1%82%E4%BC%98%E5%8C%96%E4%BB%A5%E5%8F%8A%20%E5%92%8CReenTrantLock%20%E7%9A%84%E5%AF%B9%E6%AF%94.png)
+纲要
 
-###  synchronized关键字最主要的三种使用方式的总结
-
-- **修饰实例方法，作用于当前对象实例加锁，进入同步代码前要获得当前对象实例的锁**
-- **修饰静态方法，作用于当前类对象加锁，进入同步代码前要获得当前类对象的锁** 。也就是给当前类加锁，会作用于类的所有对象实例，因为静态成员不属于任何一个实例对象，是类成员（ static 表明这是该类的一个静态资源，不管new了多少个对象，只有一份，所以对该类的所有对象都加了锁）。所以如果一个线程A调用一个实例对象的非静态 synchronized 方法，而线程B需要调用这个实例对象所属类的静态 synchronized 方法，是允许的，不会发生互斥现象，**因为访问静态 synchronized 方法占用的锁是当前类的锁，而访问非静态 synchronized 方法占用的锁是当前实例对象锁**。
-- **修饰代码块，指定加锁对象，对给定对象加锁，进入同步代码块前要获得给定对象的锁。** 和 synchronized 方法一样，synchronized(this)代码块也是锁定当前对象的。synchronized 关键字加到 static 静态方法和 synchronized(class)代码块上都是是给 Class 类上锁。这里再提一下：synchronized关键字加到非 static 静态方法上是给对象实例上锁。另外需要注意的是：尽量不要使用 synchronized(String a) 因为JVM中，字符串常量池具有缓冲功能！
-
-下面我已一个常见的面试题为例讲解一下 synchronized 关键字的具体使用。
-
-面试中面试官经常会说：“单例模式了解吗？来给我手写一下！给我解释一下双重检验锁方式实现单例模式的原理呗！”
+- 简介
+- 对象锁和类锁
+- 使用
+- 底层原理
+- JDK1.6底层优化？
+- sychronized与ReentrantLock比较
 
 
 
-**双重校验锁实现对象单例（线程安全）**
+## 简介
 
-```java
-public class Singleton {
+synchronized 是 Java 中的关键字，是利用锁的机制来实现同步的。
 
-    private volatile static Singleton uniqueInstance;
+锁机制有如下两种特性：
 
-    private Singleton() {
-    }
-
-    public static Singleton getUniqueInstance() {
-       //先判断对象是否已经实例过，没有实例化过才进入加锁代码
-        if (uniqueInstance == null) {
-            //类对象加锁
-            synchronized (Singleton.class) {
-                if (uniqueInstance == null) {
-                    uniqueInstance = new Singleton();
-                }
-            }
-        }
-        return uniqueInstance;
-    }
-}
-```
-另外，需要注意 uniqueInstance 采用 volatile 关键字修饰也是很有必要。
-
-uniqueInstance 采用 volatile 关键字修饰也是很有必要的， uniqueInstance = new Singleton(); 这段代码其实是分为三步执行：
-
-1. 为 uniqueInstance 分配内存空间
-2. 初始化 uniqueInstance
-3. 将 uniqueInstance 指向分配的内存地址
-
-但是由于 JVM 具有指令重排的特性，执行顺序有可能变成 1->3->2。指令重排在单线程环境下不会出现问题，但是在多线程环境下会导致一个线程获得还没有初始化的实例。例如，线程 T1 执行了 1 和 3，此时 T2 调用 getUniqueInstance() 后发现 uniqueInstance 不为空，因此返回 uniqueInstance，但此时 uniqueInstance 还未被初始化。
-
-使用 volatile 可以禁止 JVM 的指令重排，保证在多线程环境下也能正常运行。
-
-
-###synchronized 关键字底层原理总结
+- 互斥性：即在同一时间只允许一个线程持有某个对象锁，通过这种特性来实现多线程中的协调机制，这样在同一时间只有一个线程对需同步的代码块(复合操作)进行访问。互斥性我们也往往称为操作的原子性。
+- 可见性：必须确保在锁被释放之前，对共享变量所做的修改，对于随后获得该锁的另一个线程是可见的（即在获得锁时应获得最新共享变量的值），否则另一个线程可能是在本地缓存的某个副本上继续操作从而引起不一致。
 
 
 
-**synchronized 关键字底层原理属于 JVM 层面。**
+## 对象锁和类锁
 
-**① synchronized 同步语句块的情况**
+#### 1. 对象锁
+
+在 Java 中，每个对象都会有一个 monitor 对象，这个对象其实就是 Java 对象的锁，通常会被称为“内置锁”或“对象锁”。类的对象可以有多个，所以每个对象有其独立的对象锁，互不干扰。
+
+#### 2. 类锁
+
+在 Java 中，针对每个类也有一个锁，可以称为“类锁”，类锁实际上是通过对象锁实现的，即类的 Class 对象锁。每个类只有一个 Class 对象，所以每个类只有一个类锁。
+
+
+
+## 使用
+
+使用方式：
+
+- 同步普通方法，锁的是当前对象。
+- 同步静态方法，锁的是当前 `Class` 对象。
+- 同步块，锁的是 `()` 中的对象或类。
+
+
+
+注意
+
+- 对于一个对象，如果一个线程获取该对象锁后，其他线程将不能访问该对象任何加了该对象锁的同步方法或代码块，直到该对象锁被释放。
+- 对于类，如果一个线程获取该类锁后，其他线程将不能访问任何加了该类锁的同步方法或代码块，直到该类锁被释放。
+- 对象锁和类锁互不影响。
+
+实例参考：https://juejin.im/post/594a24defe88c2006aa01f1c#heading-7
+
+
+
+## 底层原理
+
+`JVM` 是通过进入、退出对象监视器( `Monitor` )来实现对方法、同步块的同步的。具体实现是在编译之后在同步方法调用前加入一个 `monitor.enter` 指令，在退出方法和异常处插入 `monitor.exit` 的指令。
+
+其本质就是对一个对象监视器( `Monitor` )进行获取，而这个获取过程具有排他性从而达到了同一时刻只能一个线程访问的目的。
+
+而对于没有获取到锁的线程将会阻塞到方法入口处，直到获取锁的线程 `monitor.exit` 之后才能尝试继续获取锁。
+
+synchronized 同步语句块的情况**
 
 ```java
 public class SynchronizedDemo {
@@ -97,7 +102,8 @@ synchronized 修饰的方法并没有 monitorenter 指令和 monitorexit 指令�
 在 Java 早期版本中，synchronized 属于重量级锁，效率低下，因为监视器锁（monitor）是依赖于底层的操作系统的 Mutex Lock 来实现的，Java 的线程是映射到操作系统的原生线程之上的。如果要挂起或者唤醒一个线程，都需要操作系统帮忙完成，而操作系统实现线程之间的切换时需要从用户态转换到内核态，这个状态之间的转换需要相对比较长的时间，时间成本相对较高，这也是为什么早期的 synchronized 效率低的原因。庆幸的是在 Java 6 之后 Java 官方对从 JVM 层面对synchronized 较大优化，所以现在的 synchronized 锁效率也优化得很不错了。JDK1.6对锁的实现引入了大量的优化，如自旋锁、适应性自旋锁、锁消除、锁粗化、偏向锁、轻量级锁等技术来减少锁操作的开销。
 
 
-###  JDK1.6 之后的底层优化
+
+##  JDK1.6 之后的底层优化
 
 JDK1.6 对锁的实现引入了大量的优化，如偏向锁、轻量级锁、自旋锁、适应性自旋锁、锁消除、锁粗化等技术来减少锁操作的开销。
 
@@ -143,7 +149,49 @@ JDK1.6 对锁的实现引入了大量的优化，如偏向锁、轻量级锁、�
 
 大部分情况下，上面的原则都是没有问题的，但是如果一系列的连续操作都对同一个对象反复加锁和解锁，那么会带来很多不必要的性能消耗。
 
-###  Synchronized 和 ReenTrantLock 的对比
+
+
+## 补充
+
+1. synchronized关键字不能继承。
+
+    对于父类中的 synchronized 修饰方法，子类在覆盖该方法时，默认情况下不是同步的，必须显示的使用 synchronized 关键字修饰才行。
+
+2. 在定义接口方法时不能使用synchronized关键字。
+
+3. 构造方法不能使用synchronized关键字，但可以使用synchronized代码块来进行同步。
+
+
+
+##  Synchronized 和 ReenTrantLock 的对比
+
+ReentrantLock使用方法
+
+- ReentrantLock是java.util.concurrent包下提供的一套互斥锁，相比Synchronized，ReentrantLock类提供了一些高级功能，主要有以下3项：
+
+  - 1.等待可中断，持有锁的线程长期不释放的时候，正在等待的线程可以选择放弃等待，这相当于Synchronized来说可以避免出现死锁的情况。
+  - 2.公平锁，多个线程等待同一个锁时，必须按照申请锁的时间顺序获得锁，Synchronized锁非公平锁，ReentrantLock默认的构造函数是创建的非公平锁，可以通过参数true设为公平锁，但公平锁表现的性能不是很好。
+  - 3.锁绑定多个条件，一个ReentrantLock对象可以同时绑定对个对象。
+
+- 使用方法代码如下
+
+  ```
+  private ReentrantLock lock = new ReentrantLock();
+  public void run() {
+      lock.lock();
+      try{
+          for(int i=0;i<5;i++){
+              System.out.println(Thread.currentThread().getName()+":"+i);
+          }
+      }finally{
+          lock.unlock();
+      }
+  }
+  复制代码
+  ```
+
+- 注意问题：为保证锁释放，每一个 lock() 动作，建议都立即对应一都立即对应一个 try-catch-finally
+
 
 
 **① 两者都是可重入锁**
@@ -167,3 +215,22 @@ synchronized 是依赖于 JVM 实现的，前面我们也讲到了 虚拟机团�
 **④ 性能已不是选择标准**
 
 在JDK1.6之前，synchronized 的性能是比 ReenTrantLock 差很多。具体表示为：synchronized 关键字吞吐量随线程数的增加，下降得非常严重。而ReenTrantLock 基本保持一个比较稳定的水平。我觉得这也侧面反映了， synchronized 关键字还有非常大的优化余地。后续的技术发展也证明了这一点，我们上面也讲了在 JDK1.6 之后 JVM 团队对 synchronized 关键字做了很多优化。**JDK1.6 之后，synchronized 和 ReenTrantLock 的性能基本是持平了。所以网上那些说因为性能才选择 ReenTrantLock 的文章都是错的！JDK1.6之后，性能已经不是选择synchronized和ReenTrantLock的影响因素了！而且虚拟机在未来的性能改进中会更偏向于原生的synchronized，所以还是提倡在synchronized能满足你的需求的情况下，优先考虑使用synchronized关键字来进行同步！优化后的synchronized和ReenTrantLock一样，在很多地方都是用到了CAS操作**。
+
+
+
+
+
+参考
+
+- https://juejin.im/post/594a24defe88c2006aa01f1c
+- https://crossoverjie.top/2018/01/14/Synchronize/
+- https://juejin.im/post/5bc87409f265da0ad701da35
+- https://crossoverjie.top/2018/01/14/Synchronize/
+
+
+
+
+
+
+
+

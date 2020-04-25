@@ -49,4 +49,5 @@ long id, boolean checked) { ... }
 	```
 	而RecyclerView则没有此功能。
 	
+
 [http://www.cnblogs.com/littlepanpc/p/4497290.html](http://www.cnblogs.com/littlepanpc/p/4497290.html)

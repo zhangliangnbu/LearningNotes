@@ -7,6 +7,7 @@
         - [两者联系与区别](#两者联系与区别)
     - [ArrayList核心扩容技术](#arraylist核心扩容技术)
     - [内部类](#内部类)
+- [`ensureCapacity`方法](#`ensureCapacity`方法)
 - [ArrayList经典Demo](#arraylist经典demo)
 
 <!-- /MarkdownTOC -->
@@ -661,6 +662,38 @@ public class ArrayList<E> extends AbstractList<E>
     (4)static final class ArrayListSpliterator<E> implements Spliterator<E>  
 ```
 　　ArrayList有四个内部类，其中的**Itr是实现了Iterator接口**，同时重写了里面的**hasNext()**， **next()**， **remove()** 等方法；其中的**ListItr** 继承 **Itr**，实现了**ListIterator接口**，同时重写了**hasPrevious()**， **nextIndex()**， **previousIndex()**， **previous()**， **set(E e)**， **add(E e)** 等方法，所以这也可以看出了 **Iterator和ListIterator的区别:** ListIterator在Iterator的基础上增加了添加对象，修改对象，逆向遍历等方法，这些是Iterator不能实现的。
+
+
+
+### `ensureCapacity`方法
+
+ArrayList 源码中有一个 `ensureCapacity` 方法不知道大家注意到没有，这个方法 ArrayList 内部没有被调用过，所以很显然是提供给用户调用的，那么这个方法有什么作用呢？
+
+```java
+    /**
+    如有必要，增加此 ArrayList 实例的容量，以确保它至少可以容纳由minimum capacity参数指定的元素数。
+     *
+     * @param   minCapacity   所需的最小容量
+     */
+    public void ensureCapacity(int minCapacity) {
+        int minExpand = (elementData != DEFAULTCAPACITY_EMPTY_ELEMENTDATA)
+            // any size if not default element table
+            ? 0
+            // larger than default for default empty table. It's already
+            // supposed to be at default size.
+            : DEFAULT_CAPACITY;
+
+        if (minCapacity > minExpand) {
+            ensureExplicitCapacity(minCapacity);
+        }
+    }
+
+```
+
+**最好在 add 大量元素之前用 `ensureCapacity` 方法，以减少增量重新分配的次数**
+
+
+
 ### <font face="楷体" id="6"> ArrayList经典Demo</font>
 
 ```java
