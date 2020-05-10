@@ -18,7 +18,7 @@ Surface 管理。窗口不具备绘制功能，因此每个窗口都需要有一
 
 Activity 创建 Window 并添加 View 的流程大致如下：
 
-Activity`的`attach`方法中，在此方法内将为 Activity 创建一个 Window，此时 Window 内还是空白的。
+Activity的`attach`方法中，在此方法内将为 Activity 创建一个 Window，此时 Window 内还是空白的。
 
 Activity 的`onCreate`方法中，创建 DecorView，并将我们传递过来的 View 添加到 DecorView 的内容栏中，而此时，DecorView 和 Window 两者还是处于分离的状态。
 
